@@ -135,6 +135,10 @@ print(paste("The MAE for testing dataset: ", test_mae))
 # Output the RMSE for both sets
 print(paste("The RMSE for training dataset: ", train_rmse))
 print(paste("The RMSE for testing dataset: ", test_rmse))
+
+# Print coefficients at the optimal lambda
+coef_elastic_net <- coef(elastic_net_model, s = optimal_lambda)
+print(coef_elastic_net)
 ```
 ## Result and limitation
 The result shown a big improvement in MAE from multiple regression(9.70% MAE in default rate) to elastic net regression(1.44% MAE in default rate). However, the current model (1.44% MAE and 3.03% RMSE) is still not perfect enough due to the lack of data sample. Currently, the author does not have Refinitiv or Bloomberg terminal on hand, once those tools are available, the data sample can be enlarged by putting in different years of financial figures and credit rating of the 48 REITs.

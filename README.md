@@ -1,4 +1,4 @@
-# Commercial-Real-Estate-CRE-Loan-Credit-Risk-Model
+# Commercial-Real-Estate-(CRE)-Loan-Credit-Risk-Model
 ## Background
 US CRE mortgage market consists of around $4.5 trillion of loans. The banking industry only hold 45% of the CRE loans.  The 25 largest banks by total assets hold 13% of all CRE mortgages, while the 4,600 banks outside the largest 100 hold 15–20% of all CRE mortgages. <br> <br>
 Unlike Commercial and Industrial (C&I) loan or retail loan, the borrowers of CRE loan are usually corporate entities that are not rated by any of the big three rating agencies (Standard and Poor's, Fitch, Moody). This make CRE loan usually does not have credit rating or credit score like C&I or retail loan. As there are no credit rating or credit score available, most small bank adopt their own qualitative approaches in evaluating credit risk in CRE loan, which could lead to inaccuracy and inconsistency in credit risk management. <br> <br>

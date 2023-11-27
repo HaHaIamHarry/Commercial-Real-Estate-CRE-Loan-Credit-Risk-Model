@@ -1,0 +1,144 @@
+---
+title: "CRE Credit Model"
+author: "Harry Ho"
+date: "2023-11-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Commercial Real Estate (CRE) Loan Credit Risk Model
+## Background
+US CRE mortgage market consists of around $4.5 trillion of loans. The banking industry only hold 45% of the CRE loans.  The 25 largest banks by total assets hold 13% of all CRE mortgages, while the 4,600 banks outside the largest 100 hold 15–20% of all CRE mortgages. <br> <br>
+Unlike Commercial and Industrial (C&I) loan or retail loan, the borrowers of CRE loan are usually corporate entities that are not rated by any of the big three rating agencies (Standard and Poor's, Fitch, Moody). This make CRE loan usually does not have credit rating or credit score like C&I or retail loan. As there are no credit rating or credit score available, most small bank adopt their own qualitative approaches in evaluating credit risk in CRE loan, which could lead to inaccuracy and inconsistency in credit risk management. <br> <br>
+Therefore, it is important to build a scientific and accurate model in predicting credit risk in CRE loan. As there are several CRE Real Estate Investment Trusts(REIT) ETF with credit rating available, there is an opportunity of using the credit rating and financial performance of those ETF to build a model in predicting credit risk in different CRE loans.
+
+## Method
+### Data collection and transformation
+This project first acquired financial performance from 2023 Q3 10-Q forms along with the latest credit ratings of the REIT. Then converting the EBITDA, Interest Expenses, Cash, Total Liabilities, Total Equities, Total Assets into Interest Expense Coverage Ratio, Net Debt Leverage Ratio, Total Leverage Ratio, Debt to Equity Ratio, EBITDA Asset Ratio, and EBITDA to Equity Ratio. Next, it will convert the credit rating into 5 year accumulated default rate based on the Default, Transition, and Recovery: 2022 Annual Global Corporate Default And Rating Transition Study by Standard and Poor's. <br>
+
+### Model building
+A 60-40 train test split will first be applied to the dataset(The number of data sample is not enough to do 70-30 split). In order to capture different types of non-linear relationship between predictors and default rate, the project will first regress the default rate with predictors, squared form of predictors, and logged form of predictors. Then a backward elimination by AIC will be performed to kick out the predictors that are lack of explaining power in the model. Then evaluate the MAE of the model to see how much difference the predicted default rate and the estimated default rate from credit rating is. <br><br>
+If the MAE on the testing dataset is not satisfactory, it could imply an over-fitting occurs due to the large number of predictors. In that case, an elastic net regression will be performed to prevent over-fitting.
+
+## Code
+### Package installation
+```{r}
+library(readxl)
+library(caret)
+library(Metrics)
+library(glmnet)
+```
+
+
+### Data importing
+```{r}
+credit_rating <- read_excel("CRE_Credit_Rating.xlsx")
+
+```
+
+### Data partition
+```{r}
+# Set seed for reproducibility
+set.seed(42)
+
+# Partitioning the data: 60% for training and 40% for testing
+partition <- createDataPartition(credit_rating$`5Y_Default_Rate`, p = 0.60, list = FALSE)
+
+# Create the training and testing datasets
+train_set <- credit_rating[partition, ]
+test_set <- credit_rating[-partition, ]
+```
+
+### Multiple Regression Model and backward elimination
+```{r}
+# Building the linear regression model
+model <- lm(`5Y_Default_Rate` ~ Debt_to_Equity_Ratio + I(Debt_to_Equity_Ratio^2) + I(log(Debt_to_Equity_Ratio)) + EBITDA_Asset_Ratio + I(EBITDA_Asset_Ratio^2) + I(log(EBITDA_Asset_Ratio)) + EBITDA_Equity_Ratio + I(EBITDA_Equity_Ratio^2) + I(log(EBITDA_Equity_Ratio)) + Net_Debt_Leverage_Ratio + I(Net_Debt_Leverage_Ratio^2) + I(log(Net_Debt_Leverage_Ratio))+Total_Leverage_Ratio + I(Total_Leverage_Ratio^2) + I(log(Total_Leverage_Ratio))+ Interest_Expense_Coverage_Ratio + I(Interest_Expense_Coverage_Ratio^2) + I(log(Interest_Expense_Coverage_Ratio)) , data = train_set)
+
+# Performing backward elimination based on AIC
+model_reduced <- step(model, direction = "backward")
+
+# Viewing the summary of the reduced model
+summary(model_reduced)
+
+```
+### Evaluation of the multiple regression with backward elimination
+```{r}
+# Making predictions on the training set
+train_predictions <- predict(model_reduced, newdata = train_set)
+
+# Calculating MAE for the training set
+train_mae <- mae(train_predictions, train_set$`5Y_Default_Rate`)
+
+# Calculating RMSE for the training set
+train_rmse <- RMSE(train_predictions, train_set$`5Y_Default_Rate`)
+
+# Making predictions on the testing set
+test_predictions <- predict(model_reduced, newdata = test_set)
+
+# Calculating MAE for the testing set
+test_mae <- mae(test_predictions, test_set$`5Y_Default_Rate`)
+
+# Calculating RMSE for the testing set
+test_rmse <- RMSE(test_predictions, test_set$`5Y_Default_Rate`)
+
+# Output the MAE for both sets
+print(paste("The MAE for training dataset: ", train_mae))
+print(paste("The MAE for testing dataset: ", test_mae))
+
+# Output the RMSE for both sets
+print(paste("The RMSE for training dataset: ", train_rmse))
+print(paste("The RMSE for testing dataset: ", test_rmse))
+
+```
+The MAE shown a big increase in MAE from training dataset to testing dataset. Overfitting occurs, an elastic net regression will be performed next to reduce overfitting.<br>
+
+### Elastic Net Regression and Evaluation
+```{r}
+set.seed(42)
+
+
+# Prepare the data
+x_train <- model.matrix(`5Y_Default_Rate` ~ Debt_to_Equity_Ratio + I(Debt_to_Equity_Ratio^2) + I(log(Debt_to_Equity_Ratio)) + EBITDA_Asset_Ratio + I(EBITDA_Asset_Ratio^2) + I(log(EBITDA_Asset_Ratio)) + EBITDA_Equity_Ratio + I(EBITDA_Equity_Ratio^2) + I(log(EBITDA_Equity_Ratio)) + Net_Debt_Leverage_Ratio + I(Net_Debt_Leverage_Ratio^2) + I(log(Net_Debt_Leverage_Ratio))+Total_Leverage_Ratio + I(Total_Leverage_Ratio^2) + I(log(Total_Leverage_Ratio))+ Interest_Expense_Coverage_Ratio + I(Interest_Expense_Coverage_Ratio^2) + I(log(Interest_Expense_Coverage_Ratio)), data = train_set)[,-1] # Remove intercept
+y_train <- train_set$`5Y_Default_Rate`
+
+x_test <- model.matrix(`5Y_Default_Rate` ~ Debt_to_Equity_Ratio + I(Debt_to_Equity_Ratio^2) + I(log(Debt_to_Equity_Ratio)) + EBITDA_Asset_Ratio + I(EBITDA_Asset_Ratio^2) + I(log(EBITDA_Asset_Ratio)) + EBITDA_Equity_Ratio + I(EBITDA_Equity_Ratio^2) + I(log(EBITDA_Equity_Ratio)) + Net_Debt_Leverage_Ratio + I(Net_Debt_Leverage_Ratio^2) + I(log(Net_Debt_Leverage_Ratio))+Total_Leverage_Ratio + I(Total_Leverage_Ratio^2) + I(log(Total_Leverage_Ratio))+ Interest_Expense_Coverage_Ratio + I(Interest_Expense_Coverage_Ratio^2) + I(log(Interest_Expense_Coverage_Ratio)), data = test_set)[,-1] # Remove intercept
+y_test <- test_set$`5Y_Default_Rate`
+
+alpha_value <- 0.5 # Example: 0.5 for a balanced mix of Lasso and Ridge
+elastic_net_model <- cv.glmnet(x_train, y_train, alpha = alpha_value)
+
+# Select the optimal lambda
+optimal_lambda <- elastic_net_model$lambda.min
+
+# Making predictions on the training and testing sets
+train_predictions <- predict(elastic_net_model, newx = x_train, s = optimal_lambda)
+test_predictions <- predict(elastic_net_model, newx = x_test, s = optimal_lambda)
+
+# Flatten the predictions to a vector
+train_predictions <- as.vector(train_predictions)
+test_predictions <- as.vector(test_predictions)
+
+# Calculating MAE for the training and testing sets
+train_mae <- mae(train_predictions, y_train)
+test_mae <- mae(test_predictions, y_test)
+
+# Calculating RMSE for the training and testing sets
+train_rmse <- RMSE(train_predictions, y_train)
+test_rmse <- RMSE(test_predictions, y_test)
+
+# Output the MAE for both sets
+print(paste("The MAE for training dataset: ", train_mae))
+print(paste("The MAE for testing dataset: ", test_mae))
+
+# Output the RMSE for both sets
+print(paste("The RMSE for training dataset: ", train_rmse))
+print(paste("The RMSE for testing dataset: ", test_rmse))
+```
+## Result and limitation
+The result shown a big improvement in MAE from multiple regression(9.70% MAE in default rate) to elastic net regression(1.44% MAE in default rate). However, the current model (1.44% MAE and 3.03% RMSE) is still not perfect enough due to the lack of data sample. Currently, the author does not have Refinitiv or Bloomberg terminal on hand, once those tools are available, the data sample can be enlarged by putting in different years of financial figures and credit rating of the 48 REITs.
+
+## Reference
+S&P Global Ratings. (2023, April 25). Default, Transition, and Recovery: 2022 Annual Global Corporate Default And Rating Transition Study. S&P Global. Retrieved from https://www.spglobal.com/ratings/en/research/articles/230425-default-transition-and-recovery-2022-annual-global-corporate-default-and-rating-transition-study-12702145 <br>
+Cohen & Steers. (2023, March). The commercial real estate debt market: Separating fact from fiction. Retrieved from https://www.cohenandsteers.com/insights/the-commercial-real-estate-debt-market-separating-fact-from-fiction
